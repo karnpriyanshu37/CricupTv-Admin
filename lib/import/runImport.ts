@@ -15,7 +15,8 @@ import {
   text,
 } from "@/lib/import/sportsJson";
 import type { FeedMatch, FeedStream, ParsedFeed } from "@/lib/import/sportsJson";
-import { canonSport, pairsMatch, titleKey, validPair } from "@/lib/import/matchTeams";
+import { canonSport, pairsMatch, sameMatchWindow, testDay, titleKey, validPair } from "@/lib/import/matchTeams";
+import { mergeDuplicateMatches } from "@/lib/import/dedupe";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Row = Record<string, any>;
@@ -35,6 +36,8 @@ export type Report = {
   createdCompetitions: number;
   createdSports: number;
   warnings: string[];
+  /** duplicate match cards that were merged into one (their streams moved to the card that stays) */
+  mergedDuplicates: number;
   /** true when the run stopped early because of the time limit */
   partial?: boolean;
 };
@@ -97,7 +100,7 @@ function buildChannelRules(channels: Row[]): { channel: Row; pairs: Set<string>;
   return rules;
 }
 
-type KnownMatch = { row: Row; a: string; b: string; title: string; date: string | null; sport: string };
+type KnownMatch = { row: Row; a: string; b: string; title: string; date: string | null; sport: string; test: boolean };
 
 
 /**
@@ -111,7 +114,7 @@ export async function runFeedImport(
   opts: { onProgress?: (message: string) => void; deadlineMs?: number } = {},
 ): Promise<Report> {
   const result: Report = {
-    ok: true, text: "", createdMatches: 0, skippedOldMatches: 0, skippedNoStreamMatches: 0, updatedMatches: 0, createdStreams: 0,
+    ok: true, text: "", createdMatches: 0, mergedDuplicates: 0, skippedOldMatches: 0, skippedNoStreamMatches: 0, updatedMatches: 0, createdStreams: 0,
     updatedStreams: 0, createdTeams: 0, updatedTeams: 0, createdCompetitions: 0,
     createdSports: 0, warnings: [],
   };
@@ -151,6 +154,7 @@ export async function runFeedImport(
       teams.forEach((r) => teamByKey.set(`${normalizeName(r.name)}|${r.sport_id ?? ""}`, r));
       const teamNameById = new Map<string, string>(teams.map((r) => [r.id, r.name]));
       const sportNameById = new Map<string, string>(sports.map((r) => [r.id, r.name]));
+      const compNameById = new Map<string, string>(competitions.map((r) => [r.id, r.name]));
       // Every match already in the database. A match in a feed is "the same match" when it has the same two
       // teams (any order, spelled loosely: "Athletic" = "Athletic Club") or the same title, on the same day
       // (+/- 1 day, so small time-zone shifts don't matter) and not clearly a different sport.
@@ -161,8 +165,9 @@ export async function runFeedImport(
         title: r.title ?? "",
         date: r.match_date ?? null,
         sport: canonSport(sportNameById.get(r.sport_id) ?? ""),
+        test: testDay(sportNameById.get(r.sport_id) ?? "", `${compNameById.get(r.competition_id) ?? ""} ${r.title ?? ""}`),
       }));
-      const findKnown = (date: string | null, a: string, b: string, title: string, sport: string): KnownMatch | null => {
+      const findKnown = (date: string | null, a: string, b: string, title: string, sport: string, test: boolean): KnownMatch | null => {
         const canPair = validPair(a, b);
         const tk = titleKey(title);
         let best: KnownMatch | null = null;
@@ -173,7 +178,7 @@ export async function runFeedImport(
           const sameTitle = !!tk && titleKey(k.title) === tk;
           if (!sameTeams && !sameTitle) continue;
           const gap = daysApart(date, k.date);
-          if (gap > 1 || gap >= bestGap) continue;
+          if (gap > sameMatchWindow(test, k.test) || gap >= bestGap) continue;
           best = k;
           bestGap = gap;
         }
@@ -287,7 +292,7 @@ export async function runFeedImport(
         const competitionName = infoValue(info, "eventName", "competition", "tournament", "league") || eventName || "General";
 
         let match: Row;
-        const existingMatch = findKnown(when.date, names.a, names.b, matchTitle, canonSport(sportName));
+        const existingMatch = findKnown(when.date, names.a, names.b, matchTitle, canonSport(sportName), testDay(sportName, `${competitionName} ${matchTitle}`));
         if (existingMatch) {
           // This match is already on the site: no second card. Only its streaming links / channels are added or changed.
           match = existingMatch.row;
@@ -343,7 +348,7 @@ export async function runFeedImport(
           }).select().single();
           if (error) throw new Error(`Could not create match “${matchTitle}”: ${error.message}`);
           match = data;
-          known.push({ row: match, a: teamA.name, b: teamB.name, title: matchTitle, date: when.date, sport: canonSport(sportName) });
+          known.push({ row: match, a: teamA.name, b: teamB.name, title: matchTitle, date: when.date, sport: canonSport(sportName), test: testDay(sportName, `${competitionName} ${matchTitle}`) });
           result.createdMatches++;
         }
 
@@ -481,6 +486,16 @@ export async function runFeedImport(
         }
       }
 
+      // Self-heal: if the same match is on the site twice (made by two feeds, or by two runs at the same moment),
+      // merge the copies into one card. All their streaming links are kept.
+      if (!result.partial && !(opts.deadlineMs && Date.now() > opts.deadlineMs)) {
+        try {
+          result.mergedDuplicates = await mergeDuplicateMatches(sb);
+        } catch (e) {
+          result.warnings.push(`Duplicate check failed: ${e instanceof Error ? e.message : String(e)}`);
+        }
+      }
+
       const feedName = text(parsed.feed.name);
       const owner = text(parsed.feed.owner);
       const telegramRaw = text(parsed.feed.telegram_channel);
@@ -500,7 +515,7 @@ export async function runFeedImport(
         if (error) result.warnings.push(`Feed metadata was not saved to site settings: ${error.message}`);
       }
 
-      result.text = `Import finished: ${result.createdMatches} new matches, ${result.updatedMatches} matches already existed (no duplicate cards, only their streams were touched), ${result.skippedOldMatches} already-ended matches skipped, ${result.skippedNoStreamMatches} matches without a streaming link not created, ${result.createdStreams} streams added, ${result.updatedStreams} streams changed.`;
+      result.text = `Import finished: ${result.createdMatches} new matches, ${result.updatedMatches} matches already existed (no duplicate cards, only their streams were touched), ${result.skippedOldMatches} already-ended matches skipped, ${result.mergedDuplicates} duplicate cards merged, ${result.skippedNoStreamMatches} matches without a streaming link not created, ${result.createdStreams} streams added, ${result.updatedStreams} streams changed.`;
       if (parsed.note) result.text += ` ${parsed.note}`;
       if (result.warnings.length) result.text += ` ${result.warnings.length} warning(s).`;
   } catch (error) {

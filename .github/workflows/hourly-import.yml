@@ -9,6 +9,11 @@ on:
     - cron: "5 * * * *"   # every hour at minute 5
   workflow_dispatch:       # lets you also run it by hand from the Actions tab
 
+# Never run two imports at the same time (a manual run waits for the scheduled one): two at once could make duplicate cards.
+concurrency:
+  group: hourly-sports-import
+  cancel-in-progress: false
+
 jobs:
   import:
     runs-on: ubuntu-latest

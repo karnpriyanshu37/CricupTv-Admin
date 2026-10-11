@@ -153,3 +153,13 @@ export function canonSport(name: string): string {
   if (/\b(f1|formula|motorsports?|racing)\b/.test(t)) return "motor";
   return "";
 }
+
+/**
+ * How many days apart two listings of the same match may be and still count as one match.
+ * A Test match lasts days and the feeds do not agree on which day they list, so Tests get a wider window
+ * (two Tests of one series start 5+ days apart). Everything else: 1 day.
+ */
+export function testDay(sport: string, text: string): boolean {
+  return canonSport(sport) === "cricket" && /\b(test|first[- ]class|4[- ]day|four[- ]day)\b/i.test(text);
+}
+export const sameMatchWindow = (aIsTest: boolean, bIsTest: boolean) => (aIsTest && bIsTest ? 3 : 1);

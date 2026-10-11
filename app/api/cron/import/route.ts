@@ -96,6 +96,7 @@ async function handle(req: Request) {
       createdMatches: result.createdMatches,
       existingMatches: result.updatedMatches,
       skippedOldMatches: result.skippedOldMatches,
+      mergedDuplicates: result.mergedDuplicates,
       skippedNoStreamMatches: result.skippedNoStreamMatches,
       createdStreams: result.createdStreams,
       updatedStreams: result.updatedStreams,
