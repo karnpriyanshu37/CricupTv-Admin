@@ -10,6 +10,7 @@ const IMAGE_COLUMNS: [string, string][] = [
   ["sports", "image_url"],
   ["channels", "logo_url"],
   ["matches", "banner_url"],
+  ["blog_posts", "cover_url"],
 ];
 
 export function validateImage(file: File, maxMB: number): string | null {

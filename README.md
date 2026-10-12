@@ -92,3 +92,7 @@ Matches that already exist are not duplicated; only their streaming links / chan
 3. GitHub > Actions > "Hourly sports import" > Run workflow to test it. After that it runs every hour by itself.
 
 Test by hand: `curl -X POST https://your-admin.vercel.app/api/cron/import -H "Authorization: Bearer YOUR_CRON_SECRET"`.
+
+## Blog
+
+Run `supabase/blog.sql` once in the Supabase SQL editor. Then the **Blog** tab can create posts (tick "Published" to show a post on cricuptv.site/blog).

@@ -95,6 +95,22 @@ const CONFIGS: Record<string, EntityConfig> = {
       { key: "enabled", label: "Enabled", type: "checkbox" },
     ],
   },
+  blog: {
+    table: "blog_posts", title: "Blog posts", orderBy: "created_at",
+    label: (r) => r.title || "Untitled post",
+    sub: (r) => `${r.published ? "✅ Published" : "📝 Draft"} · /blog/${r.slug ?? "…"}`,
+    imageKey: "cover_url",
+    fields: [
+      { key: "title", label: "Title (write what people would search, e.g. IPL 2027 live: how to watch)", type: "text", required: true, maxLength: 120 },
+      { key: "slug", label: "Web address (leave empty to make it from the title; lowercase letters, numbers, dashes)", type: "text", maxLength: 90 },
+      { key: "excerpt", label: "Short summary (shown on the blog list, 1-2 sentences)", type: "textarea", rows: 3, maxLength: 300 },
+      { key: "content", label: "Post text. Use # Heading, ## Sub-heading, **bold**, *italic*, - bullet, 1. numbered, > quote, [link text](https://...), ![image text](https://image-url)", type: "textarea", rows: 22, maxLength: 60000, placeholder: "Write your post here…\n\n## First heading\nParagraph text…" },
+      { key: "cover_url", label: "Cover image (16:9 works best)", type: "image", folder: "blog", maxMB: 5, aspect: 16 / 9, round: false },
+      { key: "seo_description", label: "Google description (optional, up to 160 characters; the summary is used if empty)", type: "text", maxLength: 160 },
+      { key: "author", label: "Author name (optional)", type: "text", maxLength: 60 },
+      { key: "published", label: "Published (untick to keep it as a draft that visitors cannot see)", type: "checkbox", defaultValue: false },
+    ],
+  },
   channels: {
     table: "channels", title: "Channels", orderBy: "name",
     label: (r) => r.name,
@@ -114,9 +130,9 @@ const CONFIGS: Record<string, EntityConfig> = {
 };
 
 // The Channels tab is back (auto-add a channel to matches by name). Channel mapping stays hidden: add "mapping" here to bring it back.
-const TABS = ["matches", "teams", "competitions", "sports", "channels", "streams", "import", "settings"] as const;
+const TABS = ["matches", "teams", "competitions", "sports", "channels", "blog", "streams", "import", "settings"] as const;
 const TAB_LABEL: Record<(typeof TABS)[number], string> = {
-  matches: "Matches", teams: "Teams", competitions: "Competitions", sports: "Sports", channels: "Channels",
+  matches: "Matches", teams: "Teams", competitions: "Competitions", sports: "Sports", channels: "Channels", blog: "Blog",
   streams: "Match streams", import: "JSON Import", settings: "Website settings",
 };
 
