@@ -5,6 +5,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import {
   normalizeName,
   parseStartTime,
+  utcToNepal,
   playerSlot,
   slugify,
   statusOf,
@@ -280,7 +281,7 @@ export async function runFeedImport(
         const info = fm.eventInfo ?? {};
         const names = teamNames(fm);
         const eventName = text(fm.event_name ?? fm.name);
-        const when = parseStartTime(info.startTime ?? fm.startTime ?? fm.date_time ?? fm.datetime);
+        const when = utcToNepal(parseStartTime(info.startTime ?? fm.startTime ?? fm.date_time ?? fm.datetime));
         const matchTitle = eventName || `${names.a} vs ${names.b}`;
 
         const feedSport = text(fm.Category ?? fm.category ?? fm.sport) || "Other Sports";

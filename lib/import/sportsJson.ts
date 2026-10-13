@@ -114,6 +114,26 @@ export function statusOf(value: unknown): "LIVE" | "UPCOMING" | "FINISHED" {
 
 function pad(n: number) { return String(n).padStart(2, "0"); }
 
+/**
+ * The JSON feeds give UTC wall-clock times (the Tapmad adapter converts Bangladesh time to UTC first).
+ * The website works in Nepal time, which is UTC+5:45 all year (no daylight saving), so every feed time is moved by that much.
+ * A date without a time stays as it is.
+ */
+export const NEPAL_OFFSET_MIN = 5 * 60 + 45;
+export function utcToNepal(when: { date: string | null; time: string | null }): { date: string | null; time: string | null } {
+  if (!when.date || !when.time) return when;
+  const [y, mo, d] = when.date.split("-").map(Number);
+  const [h, mi, s] = when.time.split(":").map(Number);
+  const ms = Date.UTC(y, mo - 1, d, h, mi, s || 0) + NEPAL_OFFSET_MIN * 60_000;
+  if (Number.isNaN(ms)) return when;
+  const t = new Date(ms);
+  const p = (n: number) => String(n).padStart(2, "0");
+  return {
+    date: `${t.getUTCFullYear()}-${p(t.getUTCMonth() + 1)}-${p(t.getUTCDate())}`,
+    time: `${p(t.getUTCHours())}:${p(t.getUTCMinutes())}:${p(t.getUTCSeconds())}`,
+  };
+}
+
 export function parseStartTime(value: unknown): { date: string | null; time: string | null } {
   const raw = text(value);
   if (!raw) return { date: null, time: null };

@@ -6,7 +6,10 @@ name: Hourly sports import
 
 on:
   schedule:
-    - cron: "5 * * * *"   # every hour at minute 5
+    # GitHub often delays or skips scheduled runs, so there are two attempts per hour (minute 7 and minute 37).
+    # The import never makes duplicates, so an extra run is harmless. (cron-job.org is the more reliable trigger: see README.)
+    - cron: "7 * * * *"
+    - cron: "37 * * * *"
   workflow_dispatch:       # lets you also run it by hand from the Actions tab
 
 # Never run two imports at the same time (a manual run waits for the scheduled one): two at once could make duplicate cards.

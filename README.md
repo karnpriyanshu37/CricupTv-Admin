@@ -96,3 +96,23 @@ Test by hand: `curl -X POST https://your-admin.vercel.app/api/cron/import -H "Au
 ## Blog
 
 Run `supabase/blog.sql` once in the Supabase SQL editor. Then the **Blog** tab can create posts (tick "Published" to show a post on cricuptv.site/blog).
+
+## Hourly import: make it reliable (cron-job.org)
+
+GitHub Actions "schedule" runs are best effort: GitHub delays or skips them (hours can pass between runs).
+For a run every hour, also create a free account at https://cron-job.org and add 3 cron jobs (one per feed, so each stays under its 30 second limit):
+
+| Title | URL | Schedule |
+|---|---|---|
+| import main | `https://YOUR-ADMIN-URL/api/cron/import?feed=main` | every hour at minute 0 |
+| import tapmad | `https://YOUR-ADMIN-URL/api/cron/import?feed=tapmad` | every hour at minute 3 |
+| import sonyliv | `https://YOUR-ADMIN-URL/api/cron/import?feed=sonyliv` | every hour at minute 6 |
+
+For each job: Advanced > Request method `POST`, and add the header `Authorization` = `Bearer YOUR_CRON_SECRET` (the word Bearer, a space, then the secret).
+Keep the GitHub workflow too; it is only a backup. Running the same import twice never creates duplicates.
+
+## Match times (Nepal time)
+
+The JSON feeds give UTC times. The importer converts them to Nepal time (UTC+5:45) before saving, and the website shows the saved time as it is.
+Matches saved BEFORE this change are still in UTC: run `supabase/shift-times-to-nepal.sql` ONCE (see the file) to move them.
+Times you type in the admin panel are Nepal time.
