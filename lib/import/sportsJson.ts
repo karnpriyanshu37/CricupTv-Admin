@@ -115,16 +115,17 @@ export function statusOf(value: unknown): "LIVE" | "UPCOMING" | "FINISHED" {
 function pad(n: number) { return String(n).padStart(2, "0"); }
 
 /**
- * The JSON feeds give UTC wall-clock times (the Tapmad adapter converts Bangladesh time to UTC first).
- * The website works in Nepal time, which is UTC+5:45 all year (no daylight saving), so every feed time is moved by that much.
- * A date without a time stays as it is.
+ * The JSON feeds give Bangladesh-time wall-clock times (UTC+6). Checked against real kick-offs: Bundesliga 15:30 CEST is
+ * 19:30 in the feed, Premier League 12:30 BST is 17:30, a Test day starts 11:30 for 09:30 in the UAE. (The Tapmad adapter
+ * brings its own column to the same clock.) The website works in Nepal time, UTC+5:45 all year, which is 15 minutes
+ * behind Bangladesh, so every feed time moves back by 15 minutes. A date without a time stays as it is.
  */
-export const NEPAL_OFFSET_MIN = 5 * 60 + 45;
+export const FEED_TO_NEPAL_MIN = -15;
 export function utcToNepal(when: { date: string | null; time: string | null }): { date: string | null; time: string | null } {
   if (!when.date || !when.time) return when;
   const [y, mo, d] = when.date.split("-").map(Number);
   const [h, mi, s] = when.time.split(":").map(Number);
-  const ms = Date.UTC(y, mo - 1, d, h, mi, s || 0) + NEPAL_OFFSET_MIN * 60_000;
+  const ms = Date.UTC(y, mo - 1, d, h, mi, s || 0) + FEED_TO_NEPAL_MIN * 60_000;
   if (Number.isNaN(ms)) return when;
   const t = new Date(ms);
   const p = (n: number) => String(n).padStart(2, "0");

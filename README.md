@@ -113,6 +113,7 @@ Keep the GitHub workflow too; it is only a backup. Running the same import twice
 
 ## Match times (Nepal time)
 
-The JSON feeds give UTC times. The importer converts them to Nepal time (UTC+5:45) before saving, and the website shows the saved time as it is.
-Matches saved BEFORE this change are still in UTC: run `supabase/shift-times-to-nepal.sql` ONCE (see the file) to move them.
+The JSON feeds give Bangladesh time (UTC+6). The importer moves every match back 15 minutes to Nepal time (UTC+5:45) before saving,
+and the website shows the saved time as it is (and in each visitor's own time zone on the match page).
 Times you type in the admin panel are Nepal time.
+If match times look wrong after an update, run `supabase/fix-times-to-nepal.sql` ONCE (see the file).
