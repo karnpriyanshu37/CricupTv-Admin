@@ -5,7 +5,6 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import {
   normalizeName,
   parseStartTime,
-  utcToNepal,
   playerSlot,
   slugify,
   statusOf,
@@ -29,6 +28,8 @@ export type Report = {
   skippedOldMatches: number;
   /** new matches that were not created because the feed gave no usable streaming link for them */
   skippedNoStreamMatches: number;
+  /** new matches not created because the sport's "create match cards" switch is off */
+  skippedSportOffMatches: number;
   updatedMatches: number;
   createdStreams: number;
   updatedStreams: number;
@@ -115,7 +116,7 @@ export async function runFeedImport(
   opts: { onProgress?: (message: string) => void; deadlineMs?: number } = {},
 ): Promise<Report> {
   const result: Report = {
-    ok: true, text: "", createdMatches: 0, mergedDuplicates: 0, skippedOldMatches: 0, skippedNoStreamMatches: 0, updatedMatches: 0, createdStreams: 0,
+    ok: true, text: "", createdMatches: 0, mergedDuplicates: 0, skippedOldMatches: 0, skippedNoStreamMatches: 0, skippedSportOffMatches: 0, updatedMatches: 0, createdStreams: 0,
     updatedStreams: 0, createdTeams: 0, updatedTeams: 0, createdCompetitions: 0,
     createdSports: 0, warnings: [],
   };
@@ -123,14 +124,18 @@ export async function runFeedImport(
 
   try {
       const STREAM_COLS = "id,match_id,name,type,url,quality,language,enabled,sort_order,player_slot,drm";
-      const [sportsRes, compsRes, teamsRes, matchesRes, streamsWithMeta, channelsRes] = await Promise.all([
-        sb.from("sports").select("id,name,slug,sort_order"),
+      const [sportsWithSwitch, compsRes, teamsRes, matchesRes, streamsWithMeta, channelsRes] = await Promise.all([
+        sb.from("sports").select("id,name,slug,sort_order,import_enabled"),
         sb.from("competitions").select("id,name,sport_id,logo_url"),
         sb.from("teams").select("id,name,short_name,sport_id,logo_url"),
         sb.from("matches").select("id,title,status,match_date,team1_id,team2_id,competition_id,sport_id"),
         sb.from("streams").select(`${STREAM_COLS},metadata`),
         sb.from("channels").select("id,name,type,url,quality,language,enabled,drm,match_names"),
       ]);
+      // The import_enabled column is optional (run supabase/sport-import-switch.sql): without it every sport imports as before.
+      const hasSportSwitch = !sportsWithSwitch.error;
+      const sportsRes = hasSportSwitch ? sportsWithSwitch : await sb.from("sports").select("id,name,slug,sort_order");
+      if (!hasSportSwitch) result.warnings.push("Sport switches are not active yet: run supabase/sport-import-switch.sql in the Supabase SQL editor.");
       // The metadata column is optional (older databases): fall back to the plain list without it.
       const hasMetadata = !streamsWithMeta.error;
       const streamsRes = hasMetadata ? streamsWithMeta : await sb.from("streams").select(STREAM_COLS);
@@ -149,6 +154,12 @@ export async function runFeedImport(
 
       const sportByKey = new Map<string, Row>();
       sports.forEach((r) => sportByKey.set(`${normalizeName(r.name)}|${r.slug}`, r));
+      // The sport row a feed category belongs to (by name or by slug), or undefined when the sport does not exist yet.
+      const findSport = (category: string) => {
+        const name = category || "Other Sports";
+        const slug = slugify(name);
+        return sportByKey.get(`${normalizeName(name)}|${slug}`) ?? sports.find((r) => r.slug === slug);
+      };
       const compByKey = new Map<string, Row>();
       competitions.forEach((r) => compByKey.set(`${normalizeName(r.name)}|${r.sport_id ?? ""}`, r));
       const teamByKey = new Map<string, Row>();
@@ -217,7 +228,7 @@ export async function runFeedImport(
         const { data, error } = await sb.from("sports").insert({ name, slug, enabled: true, sort_order: sortOrder }).select().single();
         if (error) {
           // A duplicate slug can exist under a differently named row. Re-read it.
-          const retry = await sb.from("sports").select("id,name,slug,sort_order").eq("slug", slug).maybeSingle();
+          const retry = await sb.from("sports").select("*").eq("slug", slug).maybeSingle();
           if (retry.data) return retry.data;
           throw new Error(`Could not create sport “${name}”: ${error.message}`);
         }
@@ -281,7 +292,7 @@ export async function runFeedImport(
         const info = fm.eventInfo ?? {};
         const names = teamNames(fm);
         const eventName = text(fm.event_name ?? fm.name);
-        const when = utcToNepal(parseStartTime(info.startTime ?? fm.startTime ?? fm.date_time ?? fm.datetime));
+        const when = parseStartTime(info.startTime ?? fm.startTime ?? fm.date_time ?? fm.datetime);
         const matchTitle = eventName || `${names.a} vs ${names.b}`;
 
         const feedSport = text(fm.Category ?? fm.category ?? fm.sport) || "Other Sports";
@@ -299,6 +310,11 @@ export async function runFeedImport(
           match = existingMatch.row;
           result.updatedMatches++;
         } else {
+          // The sport's "create match cards" switch (Sports tab) is off: no new card. Existing cards are not touched.
+          if (findSport(sportName)?.import_enabled === false) {
+            result.skippedSportOffMatches++;
+            continue;
+          }
           // A match that already ended 3+ hours ago would be deleted again straight away, so it is not added back.
           if (when.date) {
             const feedStatus = statusOf(fm.status);
@@ -516,7 +532,7 @@ export async function runFeedImport(
         if (error) result.warnings.push(`Feed metadata was not saved to site settings: ${error.message}`);
       }
 
-      result.text = `Import finished: ${result.createdMatches} new matches, ${result.updatedMatches} matches already existed (no duplicate cards, only their streams were touched), ${result.skippedOldMatches} already-ended matches skipped, ${result.mergedDuplicates} duplicate cards merged, ${result.skippedNoStreamMatches} matches without a streaming link not created, ${result.createdStreams} streams added, ${result.updatedStreams} streams changed.`;
+      result.text = `Import finished: ${result.createdMatches} new matches, ${result.updatedMatches} matches already existed (no duplicate cards, only their streams were touched), ${result.skippedOldMatches} already-ended matches skipped, ${result.mergedDuplicates} duplicate cards merged, ${result.skippedNoStreamMatches} matches without a streaming link not created, ${result.skippedSportOffMatches} matches of sports with the switch off not created, ${result.createdStreams} streams added, ${result.updatedStreams} streams changed.`;
       if (parsed.note) result.text += ` ${parsed.note}`;
       if (result.warnings.length) result.text += ` ${result.warnings.length} warning(s).`;
   } catch (error) {

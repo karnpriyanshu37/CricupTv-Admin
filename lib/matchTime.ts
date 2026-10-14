@@ -1,10 +1,10 @@
 /**
  * Match dates/times are stored as plain "wall clock" values (e.g. 2026-10-08 19:30) with no time zone.
- * They are in MATCH_TIME_ZONE (Nepal time by default). Servers like Vercel run in UTC, so comparing the
+ * They are in MATCH_TIME_ZONE (India time by default). Servers like Vercel run in UTC, so comparing the
  * wall clock with the server clock directly is hours off; this turns the stored value into a real moment in time.
- * Change it with the NEXT_PUBLIC_MATCH_TIME_ZONE environment variable (any IANA name, e.g. "Asia/Kolkata").
+ * Change it with the NEXT_PUBLIC_MATCH_TIME_ZONE environment variable (any IANA name, e.g. "Asia/Kathmandu").
  */
-export const MATCH_TIME_ZONE = process.env.NEXT_PUBLIC_MATCH_TIME_ZONE || "Asia/Kathmandu";
+export const MATCH_TIME_ZONE = process.env.NEXT_PUBLIC_MATCH_TIME_ZONE || "Asia/Kolkata";
 
 function offsetMs(atMs: number, timeZone: string): number {
   const parts = new Intl.DateTimeFormat("en-US", {

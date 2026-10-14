@@ -111,9 +111,13 @@ For a run every hour, also create a free account at https://cron-job.org and add
 For each job: Advanced > Request method `POST`, and add the header `Authorization` = `Bearer YOUR_CRON_SECRET` (the word Bearer, a space, then the secret).
 Keep the GitHub workflow too; it is only a backup. Running the same import twice never creates duplicates.
 
-## Match times (Nepal time)
+## Sport switch: which sports get match cards
 
-The JSON feeds give Bangladesh time (UTC+6). The importer moves every match back 15 minutes to Nepal time (UTC+5:45) before saving,
-and the website shows the saved time as it is (and in each visitor's own time zone on the match page).
-Times you type in the admin panel are Nepal time.
-If match times look wrong after an update, run `supabase/fix-times-to-nepal.sql` ONCE (see the file).
+Admin > Sports > open a sport > "Create match cards for this sport".
+- ON: the JSON import and the hourly cron create match cards for that sport.
+- OFF: they create no new cards for it (cards that already exist are left alone).
+Run `supabase/sport-import-switch.sql` ONCE in the Supabase SQL editor to add the switch. A sport that is new in a feed starts ON.
+
+## Match times
+
+Match times are saved exactly as the JSON feed gives them. Nothing is converted.

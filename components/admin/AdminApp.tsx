@@ -93,6 +93,7 @@ const CONFIGS: Record<string, EntityConfig> = {
       { key: "sort_order", label: "Order", type: "number" },
       { key: "image_url", label: "Sport image", type: "image", folder: "sports" },
       { key: "enabled", label: "Enabled", type: "checkbox" },
+      { key: "import_enabled", label: "Create match cards for this sport (ON: JSON import and the hourly cron create cards. OFF: they create none)", type: "checkbox", defaultValue: true },
     ],
   },
   blog: {

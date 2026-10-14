@@ -49,7 +49,7 @@ const CRICKET_FORMAT = /\b(test|t20i?|odi)\b/i;
 
 // ---------- Tapmad ----------
 
-/** Tapmad times are labelled Bangladesh time (UTC+6); subtracting 6h puts them on the same clock as the main feed (checked: same matches line up). */
+/** Tapmad times are Bangladesh time (UTC+6). The other feed keeps UTC wall-clock times, so convert to UTC. */
 function bangladeshToUtc(raw: string): string {
   const m = raw.trim().match(/^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2})(?::(\d{2}))?/);
   if (!m) return "";
