@@ -30,6 +30,8 @@ export type Report = {
   skippedNoStreamMatches: number;
   /** new matches not created because the sport's "create match cards" switch is off */
   skippedSportOffMatches: number;
+  /** new matches not created because their competition is switched off (Competitions tab, "Enabled" unticked) */
+  skippedCompetitionOffMatches: number;
   updatedMatches: number;
   createdStreams: number;
   updatedStreams: number;
@@ -116,7 +118,7 @@ export async function runFeedImport(
   opts: { onProgress?: (message: string) => void; deadlineMs?: number } = {},
 ): Promise<Report> {
   const result: Report = {
-    ok: true, text: "", createdMatches: 0, mergedDuplicates: 0, skippedOldMatches: 0, skippedNoStreamMatches: 0, skippedSportOffMatches: 0, updatedMatches: 0, createdStreams: 0,
+    ok: true, text: "", createdMatches: 0, mergedDuplicates: 0, skippedOldMatches: 0, skippedNoStreamMatches: 0, skippedSportOffMatches: 0, skippedCompetitionOffMatches: 0, updatedMatches: 0, createdStreams: 0,
     updatedStreams: 0, createdTeams: 0, updatedTeams: 0, createdCompetitions: 0,
     createdSports: 0, warnings: [],
   };
@@ -126,7 +128,7 @@ export async function runFeedImport(
       const STREAM_COLS = "id,match_id,name,type,url,quality,language,enabled,sort_order,player_slot,drm";
       const [sportsWithSwitch, compsRes, teamsRes, matchesRes, streamsWithMeta, channelsRes] = await Promise.all([
         sb.from("sports").select("id,name,slug,sort_order,import_enabled"),
-        sb.from("competitions").select("id,name,sport_id,logo_url"),
+        sb.from("competitions").select("id,name,sport_id,logo_url,enabled"),
         sb.from("teams").select("id,name,short_name,sport_id,logo_url"),
         sb.from("matches").select("id,title,status,match_date,team1_id,team2_id,competition_id,sport_id"),
         sb.from("streams").select(`${STREAM_COLS},metadata`),
@@ -314,6 +316,16 @@ export async function runFeedImport(
           if (findSport(sportName)?.import_enabled === false) {
             result.skippedSportOffMatches++;
             continue;
+          }
+          // The competition (tournament) is switched off in the Competitions tab: no new card for it either.
+          {
+            const sp = findSport(sportName);
+            const wanted = normalizeName(competitionName || "General");
+            const off = competitions.some((c) => c.enabled === false && normalizeName(c.name) === wanted && (!c.sport_id || !sp || c.sport_id === sp.id));
+            if (off) {
+              result.skippedCompetitionOffMatches++;
+              continue;
+            }
           }
           // A match that already ended 3+ hours ago would be deleted again straight away, so it is not added back.
           if (when.date) {
@@ -532,7 +544,7 @@ export async function runFeedImport(
         if (error) result.warnings.push(`Feed metadata was not saved to site settings: ${error.message}`);
       }
 
-      result.text = `Import finished: ${result.createdMatches} new matches, ${result.updatedMatches} matches already existed (no duplicate cards, only their streams were touched), ${result.skippedOldMatches} already-ended matches skipped, ${result.mergedDuplicates} duplicate cards merged, ${result.skippedNoStreamMatches} matches without a streaming link not created, ${result.skippedSportOffMatches} matches of sports with the switch off not created, ${result.createdStreams} streams added, ${result.updatedStreams} streams changed.`;
+      result.text = `Import finished: ${result.createdMatches} new matches, ${result.updatedMatches} matches already existed (no duplicate cards, only their streams were touched), ${result.skippedOldMatches} already-ended matches skipped, ${result.mergedDuplicates} duplicate cards merged, ${result.skippedNoStreamMatches} matches without a streaming link not created, ${result.skippedSportOffMatches} matches of sports with the switch off not created, ${result.skippedCompetitionOffMatches} matches of switched-off competitions not created, ${result.createdStreams} streams added, ${result.updatedStreams} streams changed.`;
       if (parsed.note) result.text += ` ${parsed.note}`;
       if (result.warnings.length) result.text += ` ${result.warnings.length} warning(s).`;
   } catch (error) {

@@ -99,6 +99,7 @@ async function handle(req: Request) {
       mergedDuplicates: result.mergedDuplicates,
       skippedNoStreamMatches: result.skippedNoStreamMatches,
       skippedSportOffMatches: result.skippedSportOffMatches,
+      skippedCompetitionOffMatches: result.skippedCompetitionOffMatches,
       createdStreams: result.createdStreams,
       updatedStreams: result.updatedStreams,
       warnings: result.warnings.slice(0, 20),

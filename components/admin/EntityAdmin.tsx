@@ -6,12 +6,13 @@ import { matchStartMs } from "@/lib/matchTime";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import ImageUpload from "./ImageUpload";
+import MatchDetailsPanel from "./MatchDetailsPanel";
 import { removeIfUnreferenced } from "@/lib/supabase/adminImages";
 import { imageUrl } from "@/lib/supabase/storage";
 import { isValidStreamUrl } from "@/lib/streams/validate";
 import { detectFromUrl } from "@/lib/player/detectStreamType";
 
-type Opt = { value: string; label: string };
+type Opt = { value: string; label: string; /** the row is switched off (shown as "(OFF)" in drop-downs) */ off?: boolean };
 export type Field = {
   key: string;
   label: string;
@@ -61,6 +62,10 @@ export type EntityConfig = {
   sportFilter?: boolean;
   /** A one-click on/off button on every row (e.g. Hot). Saves straight to the database. */
   rowToggle?: { key: string; on: string; off: string };
+  /** Matches: the edit window also shows the match's streaming links and the team / competition logos. */
+  detailPanel?: boolean;
+  /** Refuse to create a row (or change it to one) whose `field` points to a row of `table` that is switched off (enabled = false). */
+  blockIfOff?: { field: string; table: string; what: string };
   columns?: { key: string; items: { value: string; label: string; tone: "live" | "upcoming" | "finished"; empty: string }[] };
 };
 
@@ -86,6 +91,8 @@ export default function EntityAdmin({ sb, config, refs, onChanged }: Props) {
   const [filter, setFilter] = useState<string | null>(null);
   // Matches: only this sport (id from the Sports tab). null = all sports.
   const [sportFilter, setSportFilter] = useState<string | null>(null);
+  // The search box above the list.
+  const [query, setQuery] = useState("");
   const refsRef = useRef(refs);
   refsRef.current = refs;
   // Matches: rows ticked for "Delete selected".
@@ -211,8 +218,16 @@ export default function EntityAdmin({ sb, config, refs, onChanged }: Props) {
       const v = form[f.key];
       payload[f.key] = f.type === "checkbox" ? Boolean(v) : f.type === "number" ? (v === "" ? 0 : Number(v)) : typeof v === "string" ? (v.trim() === "" ? null : v.trim()) : v;
     }
-    setSaving(true);
     const isNew = !editing.id;
+    // A competition that is switched off gets no new matches (the same rule the JSON import and the hourly cron follow).
+    const guard = config.blockIfOff;
+    if (guard && form[guard.field] && (isNew || form[guard.field] !== editing[guard.field])) {
+      const { data: target } = await sb.from(guard.table).select("name,enabled").eq("id", form[guard.field]).maybeSingle();
+      if (target && target.enabled === false) {
+        return setMsg({ ok: false, text: `The ${guard.what} “${target.name}” is switched OFF, so no match can be created for it. Turn it ON in the ${guard.table === "competitions" ? "Competitions" : "list"} tab first, or choose another ${guard.what}.` });
+      }
+    }
+    setSaving(true);
     const { error } = isNew ? await sb.from(config.table).insert(payload) : await sb.from(config.table).update(payload).eq("id", editing.id);
     setSaving(false);
     if (error) return setMsg({ ok: false, text: error.message });
@@ -326,7 +341,7 @@ export default function EntityAdmin({ sb, config, refs, onChanged }: Props) {
           : <span className="thumb" aria-hidden="true" />)}
         <div className="grow">
           <strong>{config.label(r)}</strong>
-          {config.columns && activeValue === "ALL" && (
+          {config.columns && (activeValue === "ALL" || searching) && (
             <span className={`row-status row-status-${statusOfRow(r).toLowerCase()}`}>{statusOfRow(r) === "FINISHED" ? "Ended" : statusOfRow(r) === "LIVE" ? "Live" : "Upcoming"}</span>
           )}
           {config.sub && <small>{config.sub(r)}</small>}
@@ -360,20 +375,28 @@ export default function EntityAdmin({ sb, config, refs, onChanged }: Props) {
     : undefined;
   const activeValue = filters ? (filter && filters.some((f) => f.value === filter) ? filter : filters[0].value) : null;
   const inSport = (r: Row) => !sportFilter || r.sport_id === sportFilter;
+  // Search: every word typed must appear somewhere in the title, teams, competition, sport, stadium, date…
+  const words = query.toLowerCase().split(/\s+/).filter(Boolean);
+  const searching = words.length > 0;
+  const refLabel = (key: string, id: unknown) => refs[key]?.find((o) => o.value === id)?.label ?? "";
+  const haystack = (r: Row) =>
+    [config.label(r), config.sub?.(r), r.title, r.name, r.slug, r.stadium, r.round, r.broadcaster, r.match_date, refLabel("sports", r.sport_id), refLabel("competitions", r.competition_id), refLabel("teams", r.team1_id), refLabel("teams", r.team2_id)]
+      .filter(Boolean).join(" ").toLowerCase();
+  const matchesQuery = (r: Row) => { const h = haystack(r); return words.every((w) => h.includes(w)); };
   const countOf = (value: string) => rows.filter((r) => inSport(r) && (value === "ALL" || statusOfRow(r) === value)).length;
   const RANK: Record<string, number> = { LIVE: 0, UPCOMING: 1, FINISHED: 2 };
   const visibleRows = filters && activeValue
     ? rows
-        .filter((r) => inSport(r) && (activeValue === "ALL" || statusOfRow(r) === activeValue))
+        .filter((r) => (searching ? matchesQuery(r) : inSport(r) && (activeValue === "ALL" || statusOfRow(r) === activeValue)))
         .sort((x, y) => {
-          if (activeValue === "ALL") {
+          if (activeValue === "ALL" || searching) {
             const d = (RANK[statusOfRow(x)] ?? 3) - (RANK[statusOfRow(y)] ?? 3);
             if (d) return d;
             return statusOfRow(x) === "FINISHED" ? stamp(y).localeCompare(stamp(x)) : stamp(x).localeCompare(stamp(y));
           }
           return filters.find((f) => f.value === activeValue)?.tone === "finished" ? stamp(y).localeCompare(stamp(x)) : stamp(x).localeCompare(stamp(y));
         })
-    : rows;
+    : rows.filter((r) => !searching || matchesQuery(r));
   // How many live + upcoming matches each sport has (the numbers on the sport buttons).
   const sportCount = (id: string | null) => rows.filter((r) => (id === null || r.sport_id === id) && statusOfRow(r) !== "FINISHED").length;
   const activeFilter = filters?.find((f) => f.value === activeValue);
@@ -398,7 +421,7 @@ export default function EntityAdmin({ sb, config, refs, onChanged }: Props) {
                     <select value={form[f.key] ?? ""} onChange={(e) => setForm({ ...form, [f.key]: e.target.value })} required={f.required}>
                       {!f.required && <option value="">None</option>}
                       {f.required && !f.options && <option value="" disabled>Select…</option>}
-                      {opts.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+                      {opts.map((o) => <option key={o.value} value={o.value}>{o.label}{o.off ? " (OFF)" : ""}</option>)}
                     </select>
                   </label>
                   {f.quickAdd && (
@@ -449,6 +472,15 @@ export default function EntityAdmin({ sb, config, refs, onChanged }: Props) {
               </label>
             );
           })}
+          {config.detailPanel && (
+            <MatchDetailsPanel
+              sb={sb}
+              matchId={editing.id ?? null}
+              team1Id={String(form.team1_id ?? "")}
+              team2Id={String(form.team2_id ?? "")}
+              competitionId={String(form.competition_id ?? "")}
+            />
+          )}
           <div className="row-btns">
             <button className="btn btn-primary" type="submit" disabled={saving}>{saving ? "Saving…" : "Save"}</button>
             <button className="btn" type="button" onClick={() => void cancel()}>Cancel</button>
@@ -463,6 +495,18 @@ export default function EntityAdmin({ sb, config, refs, onChanged }: Props) {
           <h2>{config.title}</h2>
           <button className="btn btn-primary btn-sm" onClick={startNew}>Add new</button>
         </div>
+        <div className="admin-search">
+          <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false"><circle cx="11" cy="11" r="7" fill="none" stroke="currentColor" strokeWidth="2" /><path d="M20 20l-4-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg>
+          <input
+            type="search"
+            value={query}
+            onChange={(e) => { setQuery(e.target.value); setSelected(new Set()); }}
+            placeholder={`Search ${config.title.toLowerCase()}…`}
+            aria-label={`Search ${config.title.toLowerCase()}`}
+          />
+          {query && <button type="button" className="admin-search-clear" onClick={() => { setQuery(""); setSelected(new Set()); }} aria-label="Clear search">✕</button>}
+        </div>
+        {searching && !loading && <p className="muted admin-search-note">{visibleRows.length} found{config.columns ? ", from all sports and statuses" : ""}.</p>}
         {config.sportFilter && (refs.sports?.length ?? 0) > 0 && (
           <div className="sport-filter" role="group" aria-label="Filter by sport">
             <button type="button" className={`sport-btn ${sportFilter === null ? "active" : ""}`} onClick={() => { setSportFilter(null); setSelected(new Set()); }}>

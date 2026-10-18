@@ -9,7 +9,7 @@ import StreamsAdmin from "./StreamsAdmin";
 import SiteSettings from "./SiteSettings";
 import JsonImport from "./JsonImport";
 
-type Opt = { value: string; label: string; sportId?: string | null };
+type Opt = { value: string; label: string; sportId?: string | null; off?: boolean };
 const STATUS: Opt[] = [{ value: "UPCOMING", label: "Upcoming" }, { value: "LIVE", label: "Live" }, { value: "FINISHED", label: "Finished" }];
 const STREAM_TYPE: Opt[] = [{ value: "hls", label: "HLS (.m3u8)" }, { value: "dash", label: "DASH (.mpd)" }];
 
@@ -31,6 +31,8 @@ const CONFIGS: Record<string, EntityConfig> = {
     label: (r) => r.title || `Match ${String(r.id).slice(0, 6)}`,
     sub: (r) => `${r.is_hot ? "🔥 HOT · " : ""}${r.match_date ?? "no date"} ${r.match_time?.slice(0, 5) ?? ""}`.trim(),
     imageKey: "banner_url",
+    detailPanel: true,
+    blockIfOff: { field: "competition_id", table: "competitions", what: "competition" },
     autoEnd: true,
     sportFilter: true,
     rowToggle: { key: "is_hot", on: "Make HOT", off: "Remove HOT" },
@@ -82,7 +84,7 @@ const CONFIGS: Record<string, EntityConfig> = {
       { key: "name", label: "Competition name", type: "text", required: true },
       { key: "sport_id", label: "Sport", type: "select", ref: "sports" },
       { key: "logo_url", label: "Competition logo", type: "image", folder: "competitions" },
-      { key: "enabled", label: "Enabled", type: "checkbox" },
+      { key: "enabled", label: "Enabled (OFF = no new matches are created for this competition, by JSON import, hourly cron or by hand)", type: "checkbox" },
     ],
   },
   sports: {
@@ -234,12 +236,12 @@ export default function AdminApp() {
     if (!sb) return;
     const [s, c, t, m] = await Promise.all([
       sb.from("sports").select("id,name").order("name"),
-      sb.from("competitions").select("id,name").order("name"),
+      sb.from("competitions").select("id,name,enabled").order("name"),
       sb.from("teams").select("id,name").order("name"),
       sb.from("matches").select("id,title,match_date,sport_id").order("match_date", { ascending: false }),
     ]);
     const o = (rows: { id: string; name: string }[] | null): Opt[] => (rows ?? []).map((r) => ({ value: r.id, label: r.name }));
-    setRefs({ sports: o(s.data), competitions: o(c.data), teams: o(t.data) });
+    setRefs({ sports: o(s.data), competitions: (c.data ?? []).map((r) => ({ value: r.id, label: r.name, off: r.enabled === false })), teams: o(t.data) });
     setMatchOpts((m.data ?? []).map((r) => ({ value: r.id, label: `${r.title ?? "Match"} (${r.match_date ?? "no date"})`, sportId: r.sport_id ?? null })));
   }, [sb]);
 

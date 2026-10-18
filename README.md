@@ -118,6 +118,20 @@ Admin > Sports > open a sport > "Create match cards for this sport".
 - OFF: they create no new cards for it (cards that already exist are left alone).
 Run `supabase/sport-import-switch.sql` ONCE in the Supabase SQL editor to add the switch. A sport that is new in a feed starts ON.
 
+## Competition switch: which tournaments get match cards
+
+Admin > Competitions > open a competition > untick **Enabled**.
+- OFF: no new match card is created for that competition: not by the JSON import, not by the hourly cron, and not by hand (Add new match shows a message).
+- Cards that already exist are left alone. Switch it ON again and new cards are created again.
+- In the match form, switched-off competitions are shown as "(OFF)".
+
+## Admin: search and full match details
+
+- Every list in the admin has a **search box** (magnifier icon). In Matches it searches team names, title, competition, sport, stadium and date, across all sports and statuses.
+- **Edit match** shows everything in one window: the match fields, all its streaming links (add, edit, enable/disable, reorder, delete),
+  the channels the competition adds automatically, and the name and logo of Team 1, Team 2 and the competition.
+  Logos and streams are saved right away; the match fields are saved with the Save button.
+
 ## Match times
 
 Match times are saved exactly as the JSON feed gives them. Nothing is converted.
