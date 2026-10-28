@@ -97,3 +97,16 @@ export function parseDrm(input: unknown): { ok: true; value: DrmConfig | null } 
 
   return { ok: true, value: Object.keys(out).length ? out : null };
 }
+
+/**
+ * What the admin may paste into a "Stream URL" box. Besides a plain link it accepts a whole embed code, e.g.
+ *   <iframe width="560" height="315" src="https://www.youtube.com/embed/XXXX" ...></iframe>
+ * and keeps only the address inside src="...". Anything else is returned untouched.
+ */
+export function cleanStreamUrlInput(value: string): string {
+  if (!/<iframe/i.test(value)) return value;
+  const m = value.match(/\ssrc\s*=\s*(?:"([^"]+)"|'([^']+)')/i);
+  let src = (m?.[1] ?? m?.[2] ?? "").trim().replace(/&amp;/gi, "&");
+  if (src.startsWith("//")) src = `https:${src}`;
+  return src || value;
+}

@@ -9,7 +9,8 @@ import ImageUpload from "./ImageUpload";
 import MatchDetailsPanel from "./MatchDetailsPanel";
 import { removeIfUnreferenced } from "@/lib/supabase/adminImages";
 import { imageUrl } from "@/lib/supabase/storage";
-import { isValidStreamUrl } from "@/lib/streams/validate";
+import { cleanStreamUrlInput, isValidStreamUrl } from "@/lib/streams/validate";
+import { iframeEmbedUrl } from "@/lib/player/iframeEmbed";
 import { detectFromUrl } from "@/lib/player/detectStreamType";
 
 type Opt = { value: string; label: string; /** the row is switched off (shown as "(OFF)" in drop-downs) */ off?: boolean };
@@ -464,9 +465,18 @@ export default function EntityAdmin({ sb, config, refs, onChanged }: Props) {
                 <input
                   type={f.type === "url" ? "url" : f.type}
                   value={form[f.key] ?? ""}
-                  onChange={(e) => setForm({ ...form, [f.key]: e.target.value })}
+                  onChange={(e) => {
+                    // A stream URL box also takes a whole <iframe ...> embed code (YouTube etc.): only its src is kept,
+                    // and an embed link needs no HLS/DASH type, so the type is set to HLS for it.
+                    if (f.type === "url" && f.detectMismatchWith) {
+                      const url = cleanStreamUrlInput(e.target.value);
+                      setForm({ ...form, [f.key]: url, ...(iframeEmbedUrl(url) ? { [f.detectMismatchWith]: "hls" } : {}) });
+                      return;
+                    }
+                    setForm({ ...form, [f.key]: e.target.value });
+                  }}
                   required={f.required}
-                  maxLength={f.type === "url" ? 2048 : (f.maxLength ?? 120)}
+                  maxLength={f.type === "url" ? 4096 : (f.maxLength ?? 120)}
                   placeholder={f.placeholder}
                 />
               </label>

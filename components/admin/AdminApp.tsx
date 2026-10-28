@@ -123,7 +123,7 @@ const CONFIGS: Record<string, EntityConfig> = {
       { key: "name", label: "Channel name (e.g. Star Sports HD)", type: "text", required: true },
       { key: "logo_url", label: "Channel logo", type: "image", folder: "channels" },
       { key: "type", label: "Stream type", type: "select", options: STREAM_TYPE },
-      { key: "url", label: "Stream URL", type: "url", placeholder: "https://…", detectMismatchWith: "type" },
+      { key: "url", label: "Stream URL (or a YouTube link / the whole YouTube embed code)", type: "url", placeholder: "https://… or <iframe src=\"https://www.youtube.com/embed/…\">", detectMismatchWith: "type" },
       { key: "quality", label: "Quality", type: "text", maxLength: 12, placeholder: "HD" },
       { key: "language", label: "Language", type: "text", maxLength: 30 },
       { key: "match_names", label: "Auto-add to these matches (one per line, e.g. India vs West Indies). When the JSON brings a match with these two teams, this channel is added to it as Stream 1.", type: "textarea", rows: 5, placeholder: "India vs West Indies\nBangladesh vs Afghanistan\nSouth Africa vs Australia" },

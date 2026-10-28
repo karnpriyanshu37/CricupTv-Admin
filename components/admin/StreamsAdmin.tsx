@@ -4,7 +4,8 @@ import FormModal from "./FormModal";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { detectFromUrl } from "@/lib/player/detectStreamType";
-import { isValidStreamUrl, parseDrm } from "@/lib/streams/validate";
+import { cleanStreamUrlInput, isValidStreamUrl, parseDrm } from "@/lib/streams/validate";
+import { iframeEmbedUrl } from "@/lib/player/iframeEmbed";
 
 type Opt = { value: string; label: string; sportId?: string | null };
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -166,7 +167,10 @@ export default function StreamsAdmin({ sb, matches: allMatches, sports = [] }: {
               </label>
               <label>Quality<input value={form.quality} maxLength={12} onChange={(e) => setForm({ ...form, quality: e.target.value })} /></label>
             </div>
-            <label>Stream URL<input value={form.url} type="url" required maxLength={2048} onChange={(e) => setForm({ ...form, url: e.target.value })} placeholder="https://…" /></label>
+            <label>Stream URL (or a YouTube link / the whole YouTube embed code)
+              <input value={form.url} type="text" required maxLength={4096} onChange={(e) => { const url = cleanStreamUrlInput(e.target.value); setForm({ ...form, url, type: iframeEmbedUrl(url) ? "hls" : form.type }); }} placeholder="https://… or <iframe src=&quot;https://www.youtube.com/embed/…&quot;>" />
+            </label>
+            {iframeEmbedUrl(form.url) && <small className="muted">Embed link recognised: it plays inside the provider&apos;s own player (YouTube / Rutube). Type does not matter here.</small>}
             <label>Playing-screen button<select value={form.player_slot} onChange={(e) => setForm({ ...form, player_slot: e.target.value })}><option value="">Auto / not assigned</option><option value="1">Stream 1</option><option value="2">Stream 2</option></select></label>
             <label>Language<input value={form.language} maxLength={30} onChange={(e) => setForm({ ...form, language: e.target.value })} /></label>
             <label>DRM config (optional JSON, only credentials supplied by the stream owner)

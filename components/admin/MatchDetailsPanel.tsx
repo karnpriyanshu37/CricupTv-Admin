@@ -5,7 +5,8 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import ImageUpload from "./ImageUpload";
 import { removeIfUnreferenced } from "@/lib/supabase/adminImages";
 import { detectFromUrl } from "@/lib/player/detectStreamType";
-import { isValidStreamUrl, parseDrm } from "@/lib/streams/validate";
+import { cleanStreamUrlInput, isValidStreamUrl, parseDrm } from "@/lib/streams/validate";
+import { iframeEmbedUrl } from "@/lib/player/iframeEmbed";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Row = Record<string, any>;
@@ -221,7 +222,10 @@ function MatchStreams({ sb, matchId, competitionId }: { sb: SupabaseClient; matc
             </label>
             <label>Quality<input value={form.quality} maxLength={12} onChange={(e) => setForm({ ...form, quality: e.target.value })} /></label>
           </div>
-          <label>Stream URL<input value={form.url} maxLength={2048} onChange={(e) => setForm({ ...form, url: e.target.value })} placeholder="https://…" /></label>
+          <label>Stream URL (or a YouTube link / the whole YouTube embed code)
+            <input value={form.url} maxLength={4096} onChange={(e) => { const url = cleanStreamUrlInput(e.target.value); setForm({ ...form, url, type: iframeEmbedUrl(url) ? "hls" : form.type }); }} placeholder="https://… or <iframe src=&quot;https://www.youtube.com/embed/…&quot;>" />
+          </label>
+          {iframeEmbedUrl(form.url) && <small className="muted">Embed link recognised: it plays inside the provider&apos;s own player (YouTube / Rutube). Type does not matter here.</small>}
           <label>Playing-screen button
             <select value={form.player_slot} onChange={(e) => setForm({ ...form, player_slot: e.target.value })}>
               <option value="">Auto / not assigned</option><option value="1">Stream 1</option><option value="2">Stream 2</option>
