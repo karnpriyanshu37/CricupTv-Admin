@@ -21,10 +21,14 @@ interface LinkedField { key: string; label: string; maxLength?: number }
 /**
  * Lets the admin change the name and the logo of a team / competition right inside the match window.
  * The logo is saved the moment it is uploaded; the name needs the "Save" button of this block.
- * Note: a team or competition is shared by all of its matches, so a change shows on every one of them.
+ * A competition is shared by all of its matches, so a change shows on every one of them.
+ * A TEAM edited here changes THIS MATCH ONLY: when the team row is also used by another match, or by both sides of this
+ * match, this side first gets its own copy of the row (and the match points to it), then the change is saved on the copy.
+ * So editing Team 2 can never change Team 1, and never changes another match.
  */
-function LinkedRowEditor({ sb, table, id, heading, folder, textFields }: {
+function LinkedRowEditor({ sb, table, id, heading, folder, textFields, matchId, side, otherId, onReplace }: {
   sb: SupabaseClient; table: "teams" | "competitions"; id: string; heading: string; folder: string; textFields: LinkedField[];
+  matchId?: string; side?: "team1_id" | "team2_id"; otherId?: string; onReplace?: (side: "team1_id" | "team2_id", newId: string) => void;
 }) {
   const [row, setRow] = useState<Row | null>(null);
   const [values, setValues] = useState<Row>({});
@@ -45,11 +49,36 @@ function LinkedRowEditor({ sb, table, id, heading, folder, textFields }: {
 
   if (!row) return null;
 
+  /** The id of the team row this match may change: its own row, copied first when the row is shared (see above). */
+  const ownId = async (): Promise<string> => {
+    if (table !== "teams" || !matchId || !side) return id;
+    const { count, error: countError } = await sb.from("matches").select("id", { count: "exact", head: true })
+      .or(`team1_id.eq.${id},team2_id.eq.${id}`).neq("id", matchId);
+    if (countError) throw new Error(countError.message);
+    if ((count ?? 0) === 0 && otherId !== id) return id; // only this side of this match uses it
+    const { id: _oldId, created_at: _c, updated_at: _u, ...copy } = row; // eslint-disable-line @typescript-eslint/no-unused-vars
+    const { data: made, error: insertError } = await sb.from("teams").insert(copy).select().single();
+    if (insertError || !made) throw new Error(insertError?.message ?? "Could not create the team copy.");
+    const { error: moveError } = await sb.from("matches").update({ [side]: made.id }).eq("id", matchId);
+    if (moveError) {
+      await sb.from("teams").delete().eq("id", made.id);
+      throw new Error(moveError.message);
+    }
+    onReplace?.(side, made.id);
+    return made.id as string;
+  };
+
   const setLogo = async (path: string | null) => {
     setBusy(true);
     setMsg(null);
     const old = row.logo_url as string | null;
-    const { error } = await sb.from(table).update({ logo_url: path }).eq("id", id);
+    let error: { message: string } | null = null;
+    try {
+      const target = await ownId();
+      error = (await sb.from(table).update({ logo_url: path }).eq("id", target)).error;
+    } catch (e) {
+      error = { message: e instanceof Error ? e.message : "Could not save." };
+    }
     setBusy(false);
     if (error) return setMsg({ ok: false, text: error.message });
     setRow({ ...row, logo_url: path });
@@ -62,7 +91,13 @@ function LinkedRowEditor({ sb, table, id, heading, folder, textFields }: {
     for (const f of textFields) payload[f.key] = String(values[f.key] ?? "").trim() || null;
     if (!payload.name) return setMsg({ ok: false, text: "Name is required." });
     setBusy(true);
-    const { error } = await sb.from(table).update(payload).eq("id", id);
+    let error: { message: string } | null = null;
+    try {
+      const target = await ownId();
+      error = (await sb.from(table).update(payload).eq("id", target)).error;
+    } catch (e) {
+      error = { message: e instanceof Error ? e.message : "Could not save." };
+    }
     setBusy(false);
     if (error) return setMsg({ ok: false, text: error.message });
     setRow({ ...row, ...payload });
@@ -85,7 +120,7 @@ function LinkedRowEditor({ sb, table, id, heading, folder, textFields }: {
         </div>
         <ImageUpload sb={sb} label="Logo" folder={folder} value={row.logo_url || null} onChange={(p) => void setLogo(p)} />
       </div>
-      <small className="muted">Used by every match of this {table === "teams" ? "team" : "competition"}. The logo is saved as soon as you upload it.</small>
+      <small className="muted">{table === "teams" ? "Changes only this match." : "Used by every match of this competition."} The logo is saved as soon as you upload it.</small>
       {msg && <p className={msg.ok ? "form-ok" : "form-error"} role="status">{msg.text}</p>}
     </div>
   );
@@ -265,8 +300,10 @@ function MatchStreams({ sb, matchId, competitionId }: { sb: SupabaseClient; matc
 /* The whole panel shown inside "Edit match"                           */
 /* ------------------------------------------------------------------ */
 
-export default function MatchDetailsPanel({ sb, matchId, team1Id, team2Id, competitionId }: {
+export default function MatchDetailsPanel({ sb, matchId, team1Id, team2Id, competitionId, onTeamReplaced }: {
   sb: SupabaseClient; matchId: string | null; team1Id: string; team2Id: string; competitionId: string;
+  /** A side got its own copy of the team: the match form must use the new id (otherwise Save would put the old one back). */
+  onTeamReplaced?: (side: "team1_id" | "team2_id", newId: string) => void;
 }) {
   if (!matchId) {
     return <p className="muted detail-note">Save the match first. After that, open Edit again to add its streaming links and to change the team and competition logos here.</p>;
@@ -276,8 +313,8 @@ export default function MatchDetailsPanel({ sb, matchId, team1Id, team2Id, compe
     <div className="match-detail" onKeyDown={(e) => { if (e.key === "Enter" && (e.target as HTMLElement).tagName === "INPUT") e.preventDefault(); }}>
       <h3>All details of this match</h3>
       <MatchStreams sb={sb} matchId={matchId} competitionId={competitionId || null} />
-      {team1Id && <LinkedRowEditor sb={sb} table="teams" id={team1Id} heading="Team 1" folder="teams" textFields={[{ key: "name", label: "Team name", maxLength: 60 }, { key: "short_name", label: "Short name", maxLength: 6 }]} />}
-      {team2Id && <LinkedRowEditor sb={sb} table="teams" id={team2Id} heading="Team 2" folder="teams" textFields={[{ key: "name", label: "Team name", maxLength: 60 }, { key: "short_name", label: "Short name", maxLength: 6 }]} />}
+      {team1Id && <LinkedRowEditor sb={sb} table="teams" id={team1Id} matchId={matchId} side="team1_id" otherId={team2Id} onReplace={onTeamReplaced} heading="Team 1" folder="teams" textFields={[{ key: "name", label: "Team name", maxLength: 60 }, { key: "short_name", label: "Short name", maxLength: 6 }]} />}
+      {team2Id && <LinkedRowEditor sb={sb} table="teams" id={team2Id} matchId={matchId} side="team2_id" otherId={team1Id} onReplace={onTeamReplaced} heading="Team 2" folder="teams" textFields={[{ key: "name", label: "Team name", maxLength: 60 }, { key: "short_name", label: "Short name", maxLength: 6 }]} />}
       {competitionId && <LinkedRowEditor sb={sb} table="competitions" id={competitionId} heading="Competition" folder="competitions" textFields={[{ key: "name", label: "Competition name", maxLength: 80 }]} />}
     </div>
   );

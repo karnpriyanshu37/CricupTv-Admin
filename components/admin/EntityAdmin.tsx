@@ -489,6 +489,7 @@ export default function EntityAdmin({ sb, config, refs, onChanged }: Props) {
               team1Id={String(form.team1_id ?? "")}
               team2Id={String(form.team2_id ?? "")}
               competitionId={String(form.competition_id ?? "")}
+              onTeamReplaced={(side, newId) => setForm((prev) => (prev ? { ...prev, [side]: newId } : prev))}
             />
           )}
           <div className="row-btns">

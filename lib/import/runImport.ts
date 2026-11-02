@@ -355,7 +355,14 @@ export async function runFeedImport(
           const teamAShort = infoValue(info, "teamAShort", "team1Short", "homeShort");
           const teamBShort = infoValue(info, "teamBShort", "team2Short", "awayShort");
           const teamA = await ensureTeam(names.a, sport.id, teamALogo, teamAShort);
-          const teamB = await ensureTeam(names.b, sport.id, teamBLogo, teamBShort);
+          let teamB = await ensureTeam(names.b, sport.id, teamBLogo, teamBShort);
+          if (teamB.id === teamA.id) {
+            // One-name events ("NPL", a golf round ...) must not put ONE team row on both sides: editing one side would change the other.
+            const { data: own, error: ownError } = await sb.from("teams").insert({ name: teamA.name, short_name: teamA.short_name ?? null, sport_id: sport.id, logo_url: teamA.logo_url ?? null }).select().single();
+            if (ownError || !own) throw new Error(`Could not create the second team of “${matchTitle}”: ${ownError?.message ?? "unknown error"}`);
+            teamB = own;
+            result.createdTeams++;
+          }
           const status = statusOf(fm.status);
           const stadium = infoValue(info, "stadium", "venue", "ground");
           const round = infoValue(info, "round", "stage");
