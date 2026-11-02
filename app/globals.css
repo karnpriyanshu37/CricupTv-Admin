@@ -346,3 +346,14 @@ code { border-radius: 8px; }
 .detail-auto li { margin: .15rem 0; }
 .detail-auto li.off { opacity: .55; }
 .detail-auto li small { margin-left: .4rem; color: var(--dim); }
+
+/* Message to viewers (AnnouncementsAdmin) */
+.announce-preview { display: grid; gap: .4rem; }
+.announce-preview-card { position: relative; max-width: 360px; padding: 1.1rem 1rem .95rem; border-radius: 14px; background: #0e1214; border: 1px solid rgba(20,193,38,.55); color: #fff; text-align: center; }
+.announce-preview-card p { margin: 0 0 .7rem; font-weight: 600; white-space: pre-wrap; overflow-wrap: anywhere; }
+.announce-preview-card p:last-child { margin-bottom: 0; }
+.announce-preview-x { position: absolute; top: .25rem; right: .5rem; font-size: 1.3rem; line-height: 1; opacity: .7; }
+.announce-preview-btn { display: inline-block; padding: .5rem 1.1rem; border-radius: 999px; background: linear-gradient(180deg, #14c126, #00a80f); color: #fff; font-weight: 800; font-size: .9rem; }
+.announce-list { display: grid; gap: .8rem; }
+.announce-row { display: grid; gap: .4rem; padding-bottom: .8rem; border-bottom: 1px solid var(--border); }
+.announce-row:last-child { border-bottom: 0; padding-bottom: 0; }

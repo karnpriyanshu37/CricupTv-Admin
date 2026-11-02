@@ -7,6 +7,7 @@ import { isSupabaseConfigured } from "@/lib/env";
 import EntityAdmin, { type EntityConfig, type Field } from "./EntityAdmin";
 import StreamsAdmin from "./StreamsAdmin";
 import SiteSettings from "./SiteSettings";
+import AnnouncementsAdmin from "./AnnouncementsAdmin";
 import JsonImport from "./JsonImport";
 
 type Opt = { value: string; label: string; sportId?: string | null; off?: boolean };
@@ -133,10 +134,10 @@ const CONFIGS: Record<string, EntityConfig> = {
 };
 
 // The Channels tab is back (auto-add a channel to matches by name). Channel mapping stays hidden: add "mapping" here to bring it back.
-const TABS = ["matches", "teams", "competitions", "sports", "channels", "blog", "streams", "import", "settings"] as const;
+const TABS = ["matches", "teams", "competitions", "sports", "channels", "blog", "streams", "messages", "import", "settings"] as const;
 const TAB_LABEL: Record<(typeof TABS)[number], string> = {
   matches: "Matches", teams: "Teams", competitions: "Competitions", sports: "Sports", channels: "Channels", blog: "Blog",
-  streams: "Match streams", import: "JSON Import", settings: "Website settings",
+  streams: "Match streams", messages: "Message to viewers", import: "JSON Import", settings: "Website settings",
 };
 
 export default function AdminApp() {
@@ -310,9 +311,10 @@ export default function AdminApp() {
         ))}
       </div>
       {sb && tab === "streams" && <StreamsAdmin key={matchOpts.length} sb={sb} matches={matchOpts} sports={refs.sports ?? []} />}
+      {sb && tab === "messages" && <AnnouncementsAdmin sb={sb} />}
       {sb && tab === "settings" && <SiteSettings sb={sb} />}
       {sb && tab === "import" && <JsonImport sb={sb} onChanged={() => void loadRefs()} />}
-      {sb && tab !== "streams" && tab !== "settings" && tab !== "import" && <EntityAdmin key={tab} sb={sb} config={CONFIGS[tab]} refs={refs} onChanged={() => void loadRefs()} />}
+      {sb && tab !== "streams" && tab !== "messages" && tab !== "settings" && tab !== "import" && <EntityAdmin key={tab} sb={sb} config={CONFIGS[tab]} refs={refs} onChanged={() => void loadRefs()} />}
     </div>
   );
 }
