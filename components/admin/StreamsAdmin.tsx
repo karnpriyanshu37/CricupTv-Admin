@@ -137,16 +137,18 @@ export default function StreamsAdmin({ sb, matches: allMatches, sports = [] }: {
           {rows.length === 0 ? <p className="muted">No streams for this match yet.</p> : (
             <ul className="admin-list">
               {rows.map((r, i) => (
-                <li key={r.id} className={r.enabled ? "" : "off"}>
+                <li key={r.id} className={`stream-row${r.enabled ? "" : " off"}`}>
                   <div className="grow">
                     <strong>{r.name}</strong>
                     <small>{[r.player_slot ? `Player: Stream ${r.player_slot}` : "Player: Auto", r.type.toUpperCase(), r.quality, r.language, r.enabled ? "Enabled" : "Disabled"].filter(Boolean).join(", ")}</small>
                   </div>
+                  <div className="row-actions">
                   <button className="btn btn-sm" aria-label={`Move ${r.name} up`} disabled={i === 0} onClick={() => void move(i, -1)}>Up</button>
                   <button className="btn btn-sm" aria-label={`Move ${r.name} down`} disabled={i === rows.length - 1} onClick={() => void move(i, 1)}>Down</button>
                   <button className="btn btn-sm" onClick={() => void toggle(r)}>{r.enabled ? "Disable" : "Enable"}</button>
                   <button className="btn btn-sm" onClick={() => edit(r)}>Edit</button>
                   <button className="btn btn-sm btn-danger" onClick={() => void remove(r)}>Delete</button>
+                  </div>
                 </li>
               ))}
             </ul>

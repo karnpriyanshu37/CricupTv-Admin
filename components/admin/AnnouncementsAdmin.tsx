@@ -14,15 +14,20 @@ interface Announcement {
   button_url: string | null;
   active: boolean;
   created_at: string;
+  close_after_seconds?: number | null;
 }
 type Msg = { ok: boolean; text: string } | null;
 
 const MAX_MESSAGE = 500;
+const MAX_CLOSE_AFTER = 300;
+const NEEDS_SQL = " (run supabase/announcement-close-delay.sql in the Supabase SQL editor first)";
 
 export default function AnnouncementsAdmin({ sb }: { sb: SupabaseClient }) {
   const [message, setMessage] = useState("");
   const [buttonLabel, setButtonLabel] = useState("");
   const [buttonUrl, setButtonUrl] = useState("");
+  // seconds after which the cross shows up on the viewer's screen (typed as text so the field can be emptied while typing)
+  const [closeAfter, setCloseAfter] = useState("2");
   const [rows, setRows] = useState<Announcement[]>([]);
   const [whatsappUrl, setWhatsappUrl] = useState("");
   const [busy, setBusy] = useState(false);
@@ -53,14 +58,20 @@ export default function AnnouncementsAdmin({ sb }: { sb: SupabaseClient }) {
     if (url && !label) return setMsg({ ok: false, text: "Write the text of the button (for example: Join WhatsApp)." });
     if (label && !url) return setMsg({ ok: false, text: "Paste the link the button should open, or clear the button text." });
 
+    const secs = Number(closeAfter.trim() === "" ? "2" : closeAfter);
+    if (!Number.isInteger(secs) || secs < 0 || secs > MAX_CLOSE_AFTER) {
+      return setMsg({ ok: false, text: `"Show the cross after" must be a whole number of seconds from 0 to ${MAX_CLOSE_AFTER}.` });
+    }
+
     setBusy(true);
     setMsg(null);
     const { data, error } = await sb.from("announcements")
-      .insert({ message: text, button_label: label || null, button_url: url || null, active: true })
+      .insert({ message: text, button_label: label || null, button_url: url || null, active: true, close_after_seconds: secs })
       .select("id").single();
     if (error || !data) {
       setBusy(false);
-      return setMsg({ ok: false, text: error?.message ?? "Could not send." });
+      const missingColumn = /close_after_seconds/i.test(error?.message ?? "");
+      return setMsg({ ok: false, text: `${error?.message ?? "Could not send."}${missingColumn ? NEEDS_SQL : ""}` });
     }
     // Only one message is on at a time: switch every older one off.
     const { error: offError } = await sb.from("announcements").update({ active: false }).eq("active", true).neq("id", data.id);
@@ -146,6 +157,15 @@ export default function AnnouncementsAdmin({ sb }: { sb: SupabaseClient }) {
             </div>
           )}
 
+          <label>
+            Show the cross (close button) after (seconds)
+            <input type="number" inputMode="numeric" min={0} max={MAX_CLOSE_AFTER} step={1} value={closeAfter} onChange={(e) => setCloseAfter(e.target.value)} placeholder="2" />
+          </label>
+          <small className="muted">
+            The viewer can only close the message this many seconds after it appears. 0 = the cross is there at once. Example: 10 = the message
+            stays at least 10 seconds.
+          </small>
+
           <button className="btn btn-primary" type="submit" disabled={busy}>{busy ? "Sending…" : "Send to all viewers"}</button>
         </form>
       </section>
@@ -157,7 +177,7 @@ export default function AnnouncementsAdmin({ sb }: { sb: SupabaseClient }) {
         {live ? (
           <div className="announce-row">
             <p style={{ margin: 0, whiteSpace: "pre-wrap" }}>{live.message}</p>
-            {live.button_url && <small className="muted">Button “{live.button_label}” → {live.button_url}</small>}
+            <small className="muted">Cross appears after {live.close_after_seconds ?? 2} s{live.button_url ? ` · button “${live.button_label}” → ${live.button_url}` : ""}</small>
             <div className="row-btns">
               <button type="button" className="btn btn-sm" disabled={busy} onClick={() => void hide(live.id)}>Hide for everyone</button>
             </div>
@@ -174,7 +194,7 @@ export default function AnnouncementsAdmin({ sb }: { sb: SupabaseClient }) {
             {rows.filter((r) => !r.active).map((r) => (
               <div key={r.id} className="announce-row">
                 <p style={{ margin: 0, whiteSpace: "pre-wrap" }}>{r.message}</p>
-                <small className="muted">{new Date(r.created_at).toLocaleString()}{r.button_url ? ` · button “${r.button_label}”` : ""}</small>
+                <small className="muted">{new Date(r.created_at).toLocaleString()} · cross after {r.close_after_seconds ?? 2} s{r.button_url ? ` · button “${r.button_label}”` : ""}</small>
                 <div className="row-btns">
                   <button type="button" className="btn btn-sm" disabled={busy} onClick={() => void showAgain(r.id)}>Send again</button>
                   <button type="button" className="btn btn-sm" disabled={busy} onClick={() => void remove(r.id)}>Delete</button>

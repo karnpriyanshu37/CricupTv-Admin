@@ -26,3 +26,12 @@ begin
     alter publication supabase_realtime add table public.announcements;
   end if;
 end $$;
+
+-- How long after a message appears the cross (close button) shows up for the viewer. Set per message in the admin panel.
+alter table public.announcements add column if not exists close_after_seconds integer not null default 2;
+do $$
+begin
+  if not exists (select 1 from pg_constraint where conname = 'announcements_close_after_seconds_chk') then
+    alter table public.announcements add constraint announcements_close_after_seconds_chk check (close_after_seconds between 0 and 300);
+  end if;
+end $$;

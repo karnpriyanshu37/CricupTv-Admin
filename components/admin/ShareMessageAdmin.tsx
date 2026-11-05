@@ -69,7 +69,7 @@ export default function ShareMessageAdmin({ sb }: { sb: SupabaseClient }) {
             </label>
             <small className="muted">
               {text.length} / 800. Write <strong>{"{link}"}</strong> where your website link should go. If you do not write it, the link is added at the end.
-              Leave the box empty to use the default message. Facebook, Messenger and X only take the link and a short text, so there the message may be shown shorter.
+              Leave the box empty to use the default message. On Facebook and Messenger the message appears in the link's preview card (with the Cricup TV logo), because those apps do not allow a ready-made text; on Telegram and X it is also put in the text box. The card shows about the first 280 characters, so put the important part first. Changes show on the website within a minute.
             </small>
 
             <div className="announce-preview" aria-label="Preview">

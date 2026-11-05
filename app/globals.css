@@ -204,6 +204,7 @@ code { border-radius: 8px; }
 .admin-list .grow strong { font-weight: 800; }
 .thumb { border-radius: 12px; background: radial-gradient(circle at 30% 22%, #fff, #e4e9ee 60%, #c7d0d9); }
 .row-actions { display: flex; gap: .4rem; flex-wrap: wrap; }
+.admin-list .stream-row .grow strong { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block; }
 
 /* ---------- Matches: Live | Upcoming | Ended buttons ---------- */
 .status-filter { display: flex; flex-wrap: wrap; gap: .6rem; margin: 0 0 1.1rem; }
@@ -305,6 +306,12 @@ code { border-radius: 8px; }
   .admin-list li { align-items: flex-start; gap: .55rem; padding: .7rem .75rem; }
   .admin-list .grow { flex: 1 1 0; min-width: 0; }
   .admin-list .grow strong { overflow-wrap: anywhere; }
+  /* streams: the name always gets the full width and stays on ONE line (cut with ... if it is very long); the buttons go below it */
+  .admin-list .stream-row { flex-direction: column; align-items: stretch; }
+  .admin-list .stream-row .grow { flex: 0 0 auto; width: 100%; }
+  .admin-list .stream-row .grow strong { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; overflow-wrap: normal; }
+  .admin-list .stream-row .row-actions { justify-content: flex-start; }
+  .admin-list .stream-row .row-actions .btn { flex: 1 1 auto; }
   .row-actions { width: 100%; justify-content: flex-end; }
   .row-actions .btn { min-height: 40px; padding-inline: 1.1rem; }
   .bulk-bar { gap: .5rem; padding: .6rem; }
